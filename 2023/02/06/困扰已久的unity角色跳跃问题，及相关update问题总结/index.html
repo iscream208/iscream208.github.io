@@ -15,10 +15,14 @@
 <meta property="og:site_name" content="Farewell, kafka!">
 <meta property="og:description" content="本文主要是为了梳理自己对unity中update与fixedupdate函数的理解，也解决由于这两个函数导致的角色跳跃偶尔失灵的问题。这个问题困扰自己已久，今天以低下的效率花了一个下午到晚上九点的时间查资料加理解，好歹算是解决了。全是自己的理解，疏漏之处敬请辨明。 基本思路与理解素材来自 一篇博客 https:&#x2F;&#x2F;www.cnblogs.com&#x2F;rkmao&#x2F;p&#x2F;15715494.html  以及u">
 <meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://iscream208.github.io/images/unity1.png">
+<meta property="og:image" content="https://iscream208.github.io/images/unity2.png">
 <meta property="article:published_time" content="2023-02-06T09:21:08.000Z">
-<meta property="article:modified_time" content="2025-02-25T09:24:55.018Z">
+<meta property="article:modified_time" content="2025-02-25T12:06:35.934Z">
 <meta property="article:author" content="iscream208">
+<meta property="article:tag" content="unity">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://iscream208.github.io/images/unity1.png">
   
   
     <link rel="icon" href="/favicon.png">
@@ -156,10 +160,14 @@
 <p>和<a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1YJ411H7vc/?spm_id_from=333.999.0.0&amp;vd_source=c652593447eb7558506b47745a79fd07%E8%A7%86%E9%A2%91%E4%B8%8B%E7%9A%84%E8%AF%84%E8%AE%BA%E3%80%82">https://www.bilibili.com/video/BV1YJ411H7vc/?spm_id_from=333.999.0.0&amp;vd_source=c652593447eb7558506b47745a79fd07视频下的评论。</a></p>
 <p>博客其实在几个月前初学遇到问题时就读到了，那时实在理解不能，今天终于懂了，大概…</p>
 <p>和动画、电影一样，电子游戏的很大一部分要素是图像，随着根据玩家的操作，图像实时地进行变化，这里就涉及到操作的捕获和图像的刷新问题。由于图像的渲染速度是随着复杂度变化的，所以很难做到一直以特定的速度刷新画面。为了便于将玩家的每次操作与操作对应的事件发生、图像改变对应起来，这些操作也是按每帧来处理的。例如，一款游戏在每帧刷新时捕获玩家的方向键状况，在这一帧检测到了玩家按下前进键，游戏就在相隔时间很短的下一帧进行响应，图像里的人物随之前进、环境也随着前进改变，之后的每帧里，游戏捕获到玩家一直按着前进键，人物便一直前进，直到下一帧的刷新捕获到玩家松开按键，停止前进（个人简略的理解，不完全代表游戏真实的计算过程）。</p>
+<span id="more"></span>
+
 <p>Unity中的update函数就是根据这个模式，在每一帧刷新时捕获按键，以及执行update下的函数体。但是这样一来有个问题，就是帧率是受到渲染的复杂度等因素影响的，并不是固定的，因此update调用的时间也不是固定的，可能随着帧率的改变变快或变慢。例如每秒120帧，每帧函数调用后移动0.01m，正常1秒后能移动1.2米，但如果掉到80帧，1秒只能移动0.8米，虽然帧率还勉强可接受，但速度确实肉眼可见减小了。</p>
 <p>因此移动的代码如果写在update下，可能会因为复杂的场景或电脑运算能力较差造成了速度变化。如果一定在update下要解决这个问题，可以看第一篇参考资料，用乘deltaTime的方式解决。那篇博客里提到fixedUpdate方法相比于deltaTime方法更优，不过我认为（至少在帧率猛降这一情况下）两者是差不多的，因为都是在画面缓慢刷新时前进的距离保持不变，都会有“闪现”的感觉。</p>
 <p>上文提到的fixedUpdate在这里做具体解释，这个函数会保持固定的频率调用（默认是每秒50次）这样就不会随帧率的影响，不管这帧和下一帧间隔多久，都保持每秒50次调用。因为很多物理过程涉及到时间增量delta time，用这个固定时间刷新的函数可以保证每次刷新间隔时间delta time不变，就可以很好地处理这些问题了。因此一般涉及角色移动的函数调用会放在fixedUpdate下。</p>
-<p>但是，并不是所有运动过程都能放在这个函数下，很多人在写代码时，把移动和跳跃都放在里面，会出现跳跃不灵敏，按下跳跃键时不起跳的问题，这就涉及到另一个知识：按键的捕获（Input）是放在update下，随着帧率变的。对于移动这种长按按键（getButton）的情况，由于长按的状态一直保持很久，即使update与fixedUpdate有频率差，update刷新后依然会捕获到长按状态，传给fixedUpdate。对比一下跳跃这种短按一次按键的情况（getButtonDown）就更明了了：对于单次按键的操作（如跳跃这类捕获buttondown一次按键按下的）被update捕获后, 如果update频率快过fixedupdate，则有可能在fixedupdate得知buttondown前update就刷新了，buttondown的捕获已经消除，造成fixedupdate中与这个buttondown有关的操作不执行.如果update频率慢于fixedupdate，则可能update还未刷新，fixedupdate就执行了多次，导致多次响应。<br>第一种情况就是常出现的跳跃不灵敏的问题了。</p>
+<p>但是，并不是所有运动过程都能放在这个函数下，很多人在写代码时，把移动和跳跃都放在里面，会出现跳跃不灵敏，按下跳跃键时不起跳的问题，这就涉及到另一个知识：按键的捕获（Input）是放在update下，随着帧率变的。对于移动这种长按按键（getButton）的情况，由于长按的状态一直保持很久，即使update与fixedUpdate有频率差，update刷新后依然会捕获到长按状态，传给fixedUpdate。对比一下跳跃这种短按一次按键的情况（getButtonDown）就更明了了：对于单次按键的操作（如跳跃这类捕获buttondown一次按键按下的）被update捕获后, 如果update频率快过fixedupdate，则有可能在fixedupdate得知buttondown前update就刷新了，buttondown的捕获已经消除，造成fixedupdate中与这个buttondown有关的操作不执行。<br><img src="/images/unity1.png" alt="图片" title="快"></p>
+<p>如果update频率慢于fixedupdate，则可能update还未刷新，fixedupdate就执行了多次，导致多次响应。<br><img src="/images/unity2.png" alt="图片" title="慢"></p>
+<p>第一种情况就是常出现的跳跃不灵敏的问题了。</p>
 <p>要解决这个问题，有两种方法，第一种是只把移动的函数写在fixedUpdate中，而跳跃函数写在update中（这种方法目前还是有少量漏捕获，不知道为啥，之后再看看）。第二种方法是将跳跃判断isPressed参数写在update中，捕获到跳跃键时为true。当isPressed为true时在fixedupdate中执行跳跃并将isPressed改为false，这样update捕获按键后即使刷新也能保留判断参数，fixedupdate通过这个参数执行后再重新初始化参数以便update的下一次判断。具体代码还是看第一个博客。</p>
 
       
@@ -169,6 +177,17 @@
     <div class="article-info article-info-index">
       
       
+	<div class="article-tag tagcloud">
+		<i class="icon-price-tags icon"></i>
+		<ul class="article-tag-list">
+			 
+        		<li class="article-tag-list-item">
+        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color1">unity</a>
+        		</li>
+      		
+		</ul>
+	</div>
+
       
 
       
@@ -364,6 +383,14 @@ return o(i(t),arguments.length<2?void 0:u(arguments[1]))}})},function(t,n,r){var
             <input type="checkbox" q-on="click:toggleTag(e)" q-attr="checked:showTags">
           </label>
           <ul class="article-tag-list" q-show="showTags">
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">unity</a>
+              </li>
+             
+              <li class="article-tag-list-item">
+                <a href="javascript:void(0)" class="js-tag color1">games</a>
+              </li>
             
             <div class="clearfix"></div>
           </ul>
